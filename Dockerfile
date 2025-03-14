@@ -2,7 +2,7 @@
 FROM hugomods/hugo:latest AS builder
 
 # Добавляем аргумент для передачи домена (значение по умолчанию - localhost)
-ARG DOMAIN=localhost
+ARG DOMAIN=veschin.com
 ENV HUGO_BASEURL=http://${DOMAIN}
 
 COPY . /src
