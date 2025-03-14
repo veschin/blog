@@ -1,4 +1,4 @@
-baseURL = 'http://localhost'
+# baseURL = 'http://localhost'
 theme = "PaperMod"
 DefaultContentLanguage = "ru"
 
