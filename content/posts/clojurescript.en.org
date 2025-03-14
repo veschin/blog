@@ -1,0 +1,238 @@
+#+title: New Project with ClojureScript + FigWheel Main + Reagent
+#+options: \n:t
+#+toc: t
+#+DRAFT: false
+#+AUTHOR: Oleg Veschin
+#+GENRES: Development
+#+GENRES: Guide
+#+TAGS: lisp
+#+TAGS: clojurescript
+#+WEIGHT: 10
+* Introduction
+#+begin_quote
+Modern web development often feels like an obstacle course: complex tools, verbose code, lengthy environment setup, and endless page reloads after every change. These pains slow down iterations, distract from creativity, and force you to spend time fighting infrastructure instead of solving problems. But what if there’s a way to minimize this cycle?
+#+end_quote
+[[file:/clojurescript.png]]
+** How ClojureScript, Figwheel Main, and Reagent Solve Key Development Challenges:
+- Tool Complexity: Traditional JavaScript stacks require tons of dependencies and configurations. ClojureScript with tools.deps offers a minimalist approach—only what you need.
+- Slow Feedback Loop: Waiting for project builds and browser refreshes wastes time. Figwheel Main updates the UI instantly, preserving application state.
+- Verbose UI Code: React with JSX and classes often turns components into template labyrinths. Reagent lets you describe interfaces as data using Clojure’s concise syntax.
+** Why This Works?
+- [[https://clojurescript.org/about/rationale][ClojureScript]] isn’t just "Clojure for the browser." It’s a language where immutable data structures and functional paradigms reduce error risks, and macros eliminate duplication. Unlike Clojure (which runs on the JVM), it compiles to pure JavaScript while retaining its parent’s power.
+- [[https://github.com/bhauman/figwheel-main/tree/master][Figwheel Main]] isn’t another "live reload." It’s an interactive environment where code updates without interrupting your session. Change a function—the browser reflects it without losing state.
+- [[https://github.com/reagent-project/reagent][Reagent]] is React without overhead. Instead of JSX—vectors and functions describing DOM. Instead of complex state management—atoms that automatically trigger re-renders on data changes.
+#+begin_quote
+This stack isn’t magic—it’s a thoughtful set of tools that center the developer. You write less code, see results faster, and focus on logic, not fighting the system. If you’re tired of routine and ready for simplicity that doesn’t compromise efficiency—let’s build a project to demonstrate this in practice.
+#+end_quote
+* Dependencies
+Install the language
+#+begin_src bash
+brew install clojure/tools/clojure
+brew install rlwrap
+#+end_src
+Install the project generator
+#+begin_src bash
+clojure -Ttools install-latest :lib com.github.seancorfield/clj-new :as clj-new
+#+end_src
+* Creating the Project
+I create a project named ~veschin/cljs-test~ in the ~/tmp~ directory
+#+begin_src bash :dir /tmp :results output
+# Delete the project if it already exists
+rm -rf cljs-test
+# Create a new project using the template
+clj -Tclj-new create :template figwheel-main :name veschin/cljs-test :args '["--reagent"]'
+#+end_src
+
+#+RESULTS:
+#+begin_src fish
+Generating fresh figwheel-main project.
+  To get started:
+  -->  Change into the 'cljs-test' directory
+  -->  Start build with 'clojure -M:fig:build'
+#+end_src
+* Project Overview
+** Project Structure
+#+begin_src fish :results code
+ls /tmp/cljs-test
+#+end_src
+
+#+RESULTS:
+#+begin_src fish
+.gitignore
+README.md
+# Project config
+deps.edn
+dev.cljs.edn
+figwheel-main.edn
+resources
+# Source code directory
+src
+# Build directory
+target
+# Tests directory
+test
+test.cljs.edn
+#+end_src
+
+** Project Configuration File
+#+begin_src fish :results code :wrap src clojure
+cat /tmp/cljs-test/deps.edn
+#+end_src
+Key dependencies:
+- ~org.clojure/clojure {:mvn/version "1.12.0"}~
+- ~org.clojure/clojurescript {:mvn/version "1.11.132"}~
+For ~Reagent~:
+- ~cljsjs/react {:mvn/version "18.3.1-1"}~
+- ~cljsjs/react-dom {:mvn/version "18.3.1-1"}~
+- ~reagent/reagent {:mvn/version "1.2.0"}~
+Aliases:
+- ~:fig~: Dev mode dependencies
+- ~:build~: Builds the app in dev mode
+- ~:clean~: Cleans compiled files
+- ~:min~: Advanced compilation
+- ~:test~: Runs tests
+#+RESULTS:
+#+begin_src clojure
+{:deps {org.clojure/clojure {:mvn/version "1.12.0"}
+        org.clojure/clojurescript {:mvn/version "1.11.132"}
+        org.clojure/data.json {:mvn/version "2.5.1"}
+        cljsjs/react {:mvn/version "18.3.1-1"}
+        cljsjs/react-dom {:mvn/version "18.3.1-1"}
+        reagent/reagent {:mvn/version "1.2.0" }}
+ :paths ["src" "resources"]
+ :aliases {:fig {:extra-deps
+                 {com.bhauman/rebel-readline-cljs {:mvn/version "0.1.4"}
+                  com.bhauman/figwheel-main {:mvn/version "0.2.20"}
+                  org.slf4j/slf4j-nop {:mvn/version "2.0.16"}}
+                 :extra-paths ["target" "test"]}
+           :build {:main-opts ["-m" "figwheel.main" "-b" "dev" "-r"]}
+           :clean {:main-opts ["-m" "figwheel.main" "--clean" "dev"]}
+           :min   {:main-opts ["-m" "figwheel.main" "-O" "advanced" "-bo" "dev"]}
+           :test  {:main-opts ["-m" "figwheel.main" "-co" "test.cljs.edn" "-m" "veschin.test-runner"]}}}
+#+end_src
+* Starting the Project
+Run the project
+#+begin_src fish :dir /tmp/cljs-test :results output
+clojure -M:fig:build
+#+end_src
+Output:
+#+RESULTS:
+#+begin_src fish
+[Figwheel] Validating figwheel-main.edn
+[Figwheel] [32mfigwheel-main.edn is valid \(ツ)/[0m
+[Figwheel] Compiling build dev to "target/public/cljs-out/dev-main.js"
+[Figwheel] [32mSuccessfully compiled build dev to "target/public/cljs-out/dev-main.js" in 0.722 seconds.[0m
+[Figwheel] Outputting main file: target/public/cljs-out/dev-main-auto-testing.js
+[Figwheel] Watching paths: ("test" "src") to compile build - dev
+[Figwheel] Starting Server at http://localhost:9500
+[Figwheel] Starting REPL
+[1mPrompt will show when REPL connects to evaluation environment (i.e. a REPL hosting webpage)[0m
+Figwheel Main Controls:
+          (figwheel.main/stop-builds id ...)  ;; stops Figwheel autobuilder for ids
+          (figwheel.main/start-builds id ...) ;; starts autobuilder focused on ids
+          (figwheel.main/reset)               ;; stops, cleans, reloads config, and starts autobuilder
+          (figwheel.main/build-once id ...)   ;; builds source one time
+          (figwheel.main/clean id ...)        ;; deletes compiled cljs target files
+          (figwheel.main/status)              ;; displays current state of system
+Figwheel REPL Controls:
+          (figwheel.repl/conns)               ;; displays the current connections
+          (figwheel.repl/focus session-name)  ;; choose which session name to focus on
+In the cljs.user ns, controls can be called without ns ie. (conns) instead of (figwheel.repl/conns)
+    Docs: (doc function-name-here)
+    Exit: :cljs/quit
+ Results: Stored in vars *1, *2, *3, *e holds last exception object
+Unable to detect a system Terminal, you must not launch the Rebel readline
+from an intermediate process.
+If you are using `lein` you may need to use `lein trampoline`.
+Opening URL http://localhost:9500
+ClojureScript 1.11.132
+cljs.user=>
+#+end_src
+
+You can run this from the shell, but it’s better to start via your editor.
+** Emacs
+Requires ~clojure-mode~.
+
+Create a ~.dir-locals.el~ file in the project to set editor parameters. Reload the editor to apply changes.
+#+begin_src fish :results none
+echo '((clojurescript-mode (cider-clojure-cli-aliases . ":fig:dev")))' > /tmp/cljs-test/.dir-locals.el
+#+end_src
+1. Run ~M-x cider-jack-in-cljs~
+2. Select ~figwheel-main~
+3. When the browser page opens, you’re connected to the REPL and can execute code.
+4. Learn more about code evaluation [[https://docs.cider.mx/cider/usage/code_evaluation.html#terminology][here]].
+** VSCode
+* Reagent
+Let’s address the newcomer’s question: why does Reagent code use square brackets?
+These examples are equivalent:
+#+begin_src jsx
+function HelloWorld() {
+  return (
+    <div>
+      <h1>{appState.text}</h1>
+      <h3>Edit this in src/components/HelloWorld.js and watch it change!</h3>
+    </div>
+  );
+}
+#+end_src
+#+begin_src clojure
+(defn hello-world []
+  [:div
+   [:h1 (:text @app-state)]
+   [:h3 "Edit this in src/veschin/cljs_test.cljs and watch it change!"]])
+#+end_src
+
+The difference: Reagent components are vectors—first-class data structures, allowing direct manipulation.
+#+begin_src clojure :results code
+(vec (cons :div (map (fn [i] [:div i]) (range 10)))
+#+end_src
+This creates a component with 10 ~<div>~ blocks:
+#+RESULTS:
+#+begin_src clojure
+[:div
+ [:div 0]
+ [:div 1]
+ [:div 2]
+ [:div 3]
+ [:div 4]
+ [:div 5]
+ [:div 6]
+ [:div 7]
+ [:div 8]
+ [:div 9]]
+#+end_src
+* Simple Counter
+A basic counter using the starter template:
+#+begin_src clojure
+(ns ^:figwheel-hooks veschin.cljs-test
+  (:require
+   [goog.dom :as gdom]
+   [reagent.core :as reagent :refer [atom]]
+   [reagent.dom :as rdom]))
+
+(defonce app-state (atom {:count 0}))
+
+;; Counter component
+(defn hello-world []
+  [:div
+   [:h1 "Count: " (:count @app-state)]
+   [:button
+    {:on-click #(swap! app-state update :count inc)}
+    "Click me!"]])
+
+;; Mounting functions
+;; Render the hello-world component into the DOM
+(defn mount [el]
+  (rdom/render [hello-world] el))
+
+(defn mount-app-element []
+  (when-let [el (gdom/getElement "app")]
+    (mount el)))
+
+;; Mount the component
+(mount-app-element)
+
+;; Reload hook
+(defn ^:after-load on-reload []
+  (mount-app-element))
+#+end_src
