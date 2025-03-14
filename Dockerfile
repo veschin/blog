@@ -1,12 +1,12 @@
 FROM hugomods/hugo:latest AS builder
 
-# ARG DOMAIN=veschin.com
-# ENV HUGO_BASEURL=http://${DOMAIN}
+ARG DOMAIN=localhost
+ENV HUGO_BASEURL=http://${DOMAIN}
 
 COPY . /src
 # --baseURL ${HUGO_BASEURL}
 # Добавляем флаг --baseURL с переданным доменом
-RUN hugo --minify --source /src
+RUN hugo --minify --baseURL ${HUGO_BASEURL} --source /src
 
 FROM nginx:1.25-alpine
 
