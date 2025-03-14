@@ -1,6 +1,6 @@
 # Dockerfile для сборки Hugo-сайта с многоэтапной сборкой
 # Используем официальный образ Hugo для этапа сборки
-FROM klakegg/hugo:0.120.4-alpine AS builder
+FROM hugomods/hugo:latest AS builder
 
 # Копируем весь проект Hugo в контейнер
 COPY . /src
