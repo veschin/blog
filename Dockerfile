@@ -1,28 +1,21 @@
-# Dockerfile для сборки Hugo-сайта с многоэтапной сборкой
-# Используем официальный образ Hugo для этапа сборки
+# Модифицированный Dockerfile с динамическим доменом
 FROM hugomods/hugo:latest AS builder
 
-# Копируем весь проект Hugo в контейнер
+# Добавляем аргумент для передачи домена (значение по умолчанию - localhost)
+ARG DOMAIN=localhost
+ENV HUGO_BASEURL=http://${DOMAIN}
+
 COPY . /src
 
-# Запускаем сборку сайта с минификацией
-RUN hugo --minify --source /src
+# Добавляем флаг --baseURL с переданным доменом
+RUN hugo --minify --baseURL ${HUGO_BASEURL} --source /src
 
-# Финальный образ на базе Nginx для обслуживания статики
 FROM nginx:1.25-alpine
 
-# Удаляем дефолтные файлы Nginx
 RUN rm -rf /usr/share/nginx/html/*
 
-# Копируем собранные файлы из этапа builder
 COPY --from=builder /src/public /usr/share/nginx/html
 
-# Копируем кастомную конфигурацию Nginx (если нужно)
-# COPY nginx.conf /etc/nginx/conf.d/default.conf
-
-# Открываем порт 80
 EXPOSE 80
 
-
-# Команда для запуска Nginx
 CMD ["nginx", "-g", "daemon off;"]
