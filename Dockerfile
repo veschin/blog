@@ -1,7 +1,7 @@
 FROM hugomods/hugo:latest AS builder
 
 ARG DOMAIN=localhost
-ENV HUGO_BASEURL=http://${DOMAIN}
+ENV HUGO_BASEURL=${DOMAIN}
 
 COPY . /src
 # --baseURL ${HUGO_BASEURL}
