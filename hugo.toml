@@ -1,0 +1,28 @@
+baseURL = 'http://localhost'
+theme = "PaperMod"
+DefaultContentLanguage = "ru"
+
+[markup.highlight]
+codeFences = true
+guessSyntax = true
+lineNos = true
+style = "doom-one2"
+
+[[menu.main]]
+identifier = "github"
+name = "My GitHub"
+url = "https://github.com/veschin"
+weight = 30
+
+[[menu.main]]
+identifier = "linkedin"
+name = "My Linkedin"
+url = "https://linkedin.com/veschin"
+weight = 30
+
+[languages.en]
+    languageName = 'English'
+    title = 'Emacs(Doom)/Linux/Lisp blog'
+[languages.ru]
+    languageName = 'Русский'
+    title = 'Блог про Emacs(Doom)/Linux/Lisp'
