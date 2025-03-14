@@ -5,6 +5,8 @@ FROM klakegg/hugo:0.120.4-alpine AS builder
 # Копируем весь проект Hugo в контейнер
 COPY . /src
 
+export HUGO_ENV=production
+export HUGO_BASEURL=https://your-domain.com
 # Запускаем сборку сайта с минификацией
 RUN hugo --minify --source /src
 
@@ -23,8 +25,6 @@ COPY --from=builder /src/public /usr/share/nginx/html
 # Открываем порт 80
 EXPOSE 80
 
-HUGO_ENV=production
-HUGO_BASEURL=https://your-domain.com
 
 # Команда для запуска Nginx
 CMD ["nginx", "-g", "daemon off;"]
