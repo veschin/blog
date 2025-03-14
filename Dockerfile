@@ -5,8 +5,6 @@ FROM klakegg/hugo:0.120.4-alpine AS builder
 # Копируем весь проект Hugo в контейнер
 COPY . /src
 
-export HUGO_ENV=production
-export HUGO_BASEURL=https://your-domain.com
 # Запускаем сборку сайта с минификацией
 RUN hugo --minify --source /src
 
