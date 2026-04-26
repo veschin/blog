@@ -1,0 +1,6 @@
+#+title: {{ replace .File.ContentBaseName "-" " " | title }}
+#+author: Олег Вещин
+#+date: {{ now.Format "2006-01-02" }}
+#+draft: true
+#+summary:
+#+tags[]:
