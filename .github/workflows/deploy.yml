@@ -1,4 +1,4 @@
-name: Build & Push
+name: Build & Deploy
 
 on:
   push:
@@ -34,3 +34,9 @@ jobs:
           tags: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+
+      - name: Deploy
+        run: |
+          curl -sf -X POST \
+            -H "X-Deploy-Token: ${{ secrets.DEPLOY_WEBHOOK_TOKEN }}" \
+            https://blog.veschin.com/hooks/deploy
