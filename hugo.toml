@@ -43,7 +43,7 @@ weight = 30
 
 [languages.en]
     languageName = 'English'
-    title = 'Emacs(Doom)/Linux/Lisp blog'
+    title = 'Emacs · Linux · Lisp · Gamedev'
 [languages.en.params]
     description = "Blog about Emacs, Doom Emacs, Linux, Lisp and functional programming"
 [languages.en.params.homeInfoParams]
@@ -51,7 +51,7 @@ weight = 30
     Content = "Emacs, Linux, Lisp, gamedev. I write about what I build."
 [languages.ru]
     languageName = 'Русский'
-    title = 'Блог про Emacs(Doom)/Linux/Lisp'
+    title = 'Emacs · Linux · Lisp · Gamedev'
 [languages.ru.params.homeInfoParams]
     Title = "Олег Вещин"
     Content = "Emacs, Linux, Lisp, gamedev. Пишу о том, что строю."
