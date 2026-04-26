@@ -1,4 +1,4 @@
-baseURL = 'https://veschin.com'
+baseURL = 'https://blog.veschin.com'
 theme = "PaperMod"
 DefaultContentLanguage = "ru"
 enableRobotsTXT = true
@@ -9,6 +9,7 @@ description = "Блог про Emacs, Doom Emacs, Linux, Lisp и функцио�
 keywords = ["emacs", "doom emacs", "linux", "lisp", "clojure", "clojurescript"]
 images = ["/clojurescript.png"]
 DateFormat = "2 January 2006"
+mainSections = ["posts", "magnum-opus"]
 
 [params.schema]
 publisherType = "Person"
@@ -23,16 +24,17 @@ lineNos = true
 style = "doom-one2"
 
 [[menu.main]]
+identifier = "magnum-opus"
+name = "Magnum Opus"
+url = "/magnum-opus/"
+weight = 10
+
+[[menu.main]]
 identifier = "github"
 name = "My GitHub"
 url = "https://github.com/veschin"
 weight = 30
 
-[[menu.main]]
-identifier = "linkedin"
-name = "My Linkedin"
-url = "https://linkedin.com/veschin"
-weight = 30
 
 [languages.en]
     languageName = 'English'

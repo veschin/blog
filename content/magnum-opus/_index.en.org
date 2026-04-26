@@ -1,0 +1,2 @@
+#+title: Magnum Opus
+#+summary: Factory-builder devlog in Rust and Bevy
