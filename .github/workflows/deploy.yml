@@ -39,4 +39,4 @@ jobs:
         run: |
           curl -sf -X POST \
             -H "X-Deploy-Token: ${{ secrets.DEPLOY_WEBHOOK_TOKEN }}" \
-            https://blog.veschin.com/hooks/deploy
+            https://deploy.veschin.com/hooks/deploy
