@@ -1,28 +1,30 @@
 #+title: New Project with ClojureScript + FigWheel Main + Reagent
+#+date: 2025-01-01
+#+summary: Step-by-step guide to building a ClojureScript web project with hot-reloading via FigWheel Main and declarative UI using Reagent. From setup to a working counter.
 #+options: \n:t
 #+toc: t
 #+DRAFT: false
 #+AUTHOR: Oleg Veschin
 #+GENRES: Development
 #+GENRES: Guide
-#+TAGS: lisp
-#+TAGS: clojurescript
+#+TAGS[]: lisp
+#+TAGS[]: clojurescript
 #+WEIGHT: 10
 * Introduction
 #+begin_quote
-Modern web development often feels like an obstacle course: complex tools, verbose code, lengthy environment setup, and endless page reloads after every change. These pains slow down iterations, distract from creativity, and force you to spend time fighting infrastructure instead of solving problems. But what if there’s a way to minimize this cycle?
+Modern web development often feels like an obstacle course: complex tools, verbose code, lengthy environment setup, and endless page reloads after every change. These pains slow down iterations, distract from creativity, and force you to spend time fighting infrastructure instead of solving problems. But what if there's a way to minimize this cycle?
 #+end_quote
 [[file:/clojurescript.png]]
 ** How ClojureScript, Figwheel Main, and Reagent Solve Key Development Challenges:
-- Tool Complexity: Traditional JavaScript stacks require tons of dependencies and configurations. ClojureScript with tools.deps offers a minimalist approach—only what you need.
+- Tool Complexity: Traditional JavaScript stacks require tons of dependencies and configurations. ClojureScript with tools.deps offers a minimalist approach-only what you need.
 - Slow Feedback Loop: Waiting for project builds and browser refreshes wastes time. Figwheel Main updates the UI instantly, preserving application state.
-- Verbose UI Code: React with JSX and classes often turns components into template labyrinths. Reagent lets you describe interfaces as data using Clojure’s concise syntax.
+- Verbose UI Code: React with JSX and classes often turns components into template labyrinths. Reagent lets you describe interfaces as data using Clojure's concise syntax.
 ** Why This Works?
-- [[https://clojurescript.org/about/rationale][ClojureScript]] isn’t just "Clojure for the browser." It’s a language where immutable data structures and functional paradigms reduce error risks, and macros eliminate duplication. Unlike Clojure (which runs on the JVM), it compiles to pure JavaScript while retaining its parent’s power.
-- [[https://github.com/bhauman/figwheel-main/tree/master][Figwheel Main]] isn’t another "live reload." It’s an interactive environment where code updates without interrupting your session. Change a function—the browser reflects it without losing state.
-- [[https://github.com/reagent-project/reagent][Reagent]] is React without overhead. Instead of JSX—vectors and functions describing DOM. Instead of complex state management—atoms that automatically trigger re-renders on data changes.
+- [[https://clojurescript.org/about/rationale][ClojureScript]] isn't just "Clojure for the browser." It's a language where immutable data structures and functional paradigms reduce error risks, and macros eliminate duplication. Unlike Clojure (which runs on the JVM), it compiles to pure JavaScript while retaining its parent's power.
+- [[https://github.com/bhauman/figwheel-main/tree/master][Figwheel Main]] isn't another "live reload." It's an interactive environment where code updates without interrupting your session. Change a function-the browser reflects it without losing state.
+- [[https://github.com/reagent-project/reagent][Reagent]] is React without overhead. Instead of JSX-vectors and functions describing DOM. Instead of complex state management-atoms that automatically trigger re-renders on data changes.
 #+begin_quote
-This stack isn’t magic—it’s a thoughtful set of tools that center the developer. You write less code, see results faster, and focus on logic, not fighting the system. If you’re tired of routine and ready for simplicity that doesn’t compromise efficiency—let’s build a project to demonstrate this in practice.
+This stack isn't magic-it's a thoughtful set of tools that center the developer. You write less code, see results faster, and focus on logic, not fighting the system. If you're tired of routine and ready for simplicity that doesn't compromise efficiency-let's build a project to demonstrate this in practice.
 #+end_quote
 * Dependencies
 Install the language
@@ -149,7 +151,7 @@ ClojureScript 1.11.132
 cljs.user=>
 #+end_src
 
-You can run this from the shell, but it’s better to start via your editor.
+You can run this from the shell, but it's better to start via your editor.
 ** Emacs
 Requires ~clojure-mode~.
 
@@ -159,11 +161,11 @@ echo '((clojurescript-mode (cider-clojure-cli-aliases . ":fig:dev")))' > /tmp/cl
 #+end_src
 1. Run ~M-x cider-jack-in-cljs~
 2. Select ~figwheel-main~
-3. When the browser page opens, you’re connected to the REPL and can execute code.
+3. When the browser page opens, you're connected to the REPL and can execute code.
 4. Learn more about code evaluation [[https://docs.cider.mx/cider/usage/code_evaluation.html#terminology][here]].
 ** VSCode
 * Reagent
-Let’s address the newcomer’s question: why does Reagent code use square brackets?
+Let's address the newcomer's question: why does Reagent code use square brackets?
 These examples are equivalent:
 #+begin_src jsx
 function HelloWorld() {
@@ -182,7 +184,7 @@ function HelloWorld() {
    [:h3 "Edit this in src/veschin/cljs_test.cljs and watch it change!"]])
 #+end_src
 
-The difference: Reagent components are vectors—first-class data structures, allowing direct manipulation.
+The difference: Reagent components are vectors-first-class data structures, allowing direct manipulation.
 #+begin_src clojure :results code
 (vec (cons :div (map (fn [i] [:div i]) (range 10)))
 #+end_src
