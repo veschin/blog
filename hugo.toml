@@ -11,6 +11,14 @@ images = ["/clojurescript.png"]
 DateFormat = "2 January 2006"
 mainSections = ["posts", "magnum-opus"]
 
+[params.homeInfoParams]
+Title = "Олег Вещин"
+Content = "Emacs, Linux, Lisp, gamedev. Пишу о том, что строю."
+
+[[params.socialIcons]]
+name = "github"
+url = "https://github.com/veschin"
+
 [params.schema]
 publisherType = "Person"
 
