@@ -11,9 +11,6 @@ images = ["/clojurescript.png"]
 DateFormat = "2 January 2006"
 mainSections = ["posts", "magnum-opus"]
 
-[params.homeInfoParams]
-Title = "Олег Вещин"
-Content = "Emacs, Linux, Lisp, gamedev. Пишу о том, что строю."
 
 [[params.socialIcons]]
 name = "github"
@@ -33,7 +30,7 @@ style = "doom-one2"
 
 [[menu.main]]
 identifier = "magnum-opus"
-name = "Magnum Opus"
+name = "Magnum Opus DevLog"
 url = "/magnum-opus/"
 weight = 10
 
@@ -49,6 +46,12 @@ weight = 30
     title = 'Emacs(Doom)/Linux/Lisp blog'
 [languages.en.params]
     description = "Blog about Emacs, Doom Emacs, Linux, Lisp and functional programming"
+[languages.en.params.homeInfoParams]
+    Title = "Oleg Veschin"
+    Content = "Emacs, Linux, Lisp, gamedev. I write about what I build."
 [languages.ru]
     languageName = 'Русский'
     title = 'Блог про Emacs(Doom)/Linux/Lisp'
+[languages.ru.params.homeInfoParams]
+    Title = "Олег Вещин"
+    Content = "Emacs, Linux, Lisp, gamedev. Пишу о том, что строю."

@@ -1,2 +1,2 @@
-#+title: Magnum Opus
+#+title: Magnum Opus DevLog
 #+summary: Девлог разработки factory-builder на Rust и Bevy

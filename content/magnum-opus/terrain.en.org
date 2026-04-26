@@ -1,0 +1,291 @@
+#+title: Procedural Terrain Generation: From a Flat Grid to Mountains
+#+author: Oleg Veschin
+#+date: 2026-04-26
+#+draft: false
+#+summary: Nine versions of a terrain generator for a factory-builder in Rust/Bevy. The D8 rainfall dead end, the spring-based breakthrough, smoothstep mountains. Code, diagrams, screenshots.
+#+tags[]: rust
+#+tags[]: bevy
+#+tags[]: gamedev
+#+tags[]: procedural-generation
+#+tags[]: magnum-opus
+
+* Visual Style
+
+The project's visual foundation is David Holland's article [[https://www.davidhol.land/articles/3d-pixel-art-rendering/][3D Pixel Art Rendering]]. It describes a set of 11 techniques for turning a 3D scene into pixel art --- a stylization resembling classic pixel graphics.
+
+#+CAPTION: Reference: meadow scene from David Holland's article
+[[file:/magnum-opus/ref-holland-meadow.png]]
+
+Three key techniques carried over to the project:
+
+- *Column rendering.* Each map cell is a vertical column. Column height corresponds to the terrain height at that point. The result resembles voxel[fn:voxel] graphics but is built on ordinary 3D primitives.
+- *Toon shading.* A material with discrete lighting levels. Photorealistic gradients are replaced with sharp color transitions --- a comic book aesthetic.
+- *Orthographic camera.* A camera without perspective distortion: parallel lines remain parallel regardless of distance. Reinforces the pixel art stylization.
+
+Stack: Rust, Bevy 0.18[fn:bevy].
+
+[fn:voxel] A voxel is a volumetric pixel --- an elementary cube in 3D space. Minecraft is the most well-known example of voxel graphics.
+[fn:bevy] Bevy is a game framework for Rust. It uses ECS (Entity-Component-System) architecture where data is stored separately from logic.
+
+* First Render: A Flat World
+
+#+CAPTION: v1: flat 32x32 grid, first primitives on the surface
+[[file:/magnum-opus/01-first-render.png]]
+
+Starting point --- a flat 32x32 cell grid. No height, no water, no resources. Gray cubes on a green plane.
+
+The core data structure --- a flat grid that survived unchanged through all nine generator versions:
+
+#+begin_src rust
+pub struct FlatGrid<T> {
+    pub width: usize,
+    pub height: usize,
+    pub data: Vec<T>,
+}
+
+impl<T: Copy + Default> FlatGrid<T> {
+    pub fn new(width: usize, height: usize) -> Self {
+        Self {
+            width, height,
+            data: vec![T::default(); width * height],
+        }
+    }
+
+    pub fn get(&self, x: i32, z: i32) -> T {
+        self.data[z as usize * self.width + x as usize]
+    }
+
+    pub fn set(&mut self, x: i32, z: i32, val: T) {
+        self.data[z as usize * self.width + x as usize] = val;
+    }
+}
+#+end_src
+
+A one-dimensional array with two-dimensional addressing. The generic parameter allows storing heights (floats), terrain types (enum), boolean masks, and distances in the same structure. One structure for all generator data layers.
+
+* Heightmap and Water: First Failures
+
+#+CAPTION: v2-v3: heightmap, river, resource deposits
+[[file:/magnum-opus/02-terrain-tiles.png]]
+
+Versions v2-v3 introduce a heightmap[fn:heightmap] based on Perlin noise[fn:noise] --- 21 levels from -5 to +5. Cliffs, lakes, and elevation changes appear for the first time.
+
+The problem surfaces when testing across different generator seeds[fn:seed]. The noise offset parameter controls the land-to-ocean ratio: 1.5 produces too much ocean, 2.0 fixes one seed but breaks another, 3.0 and 4.0 --- the same pattern. Each value works locally and fails globally.
+
+*Conclusion:* four tuning iterations, four different seeds broken. A value that works across all seeds simultaneously was not found.
+
+[fn:heightmap] A heightmap is a 2D grid where each cell holds a numeric height value. Visually: higher values produce higher terrain.
+[fn:noise] Perlin noise is an algorithm for generating pseudo-random terrain. It produces smooth, natural-looking elevation changes instead of chaotic scattering.
+[fn:seed] A seed is a number that determines a specific variant of random generation. The same seed always produces the same result.
+
+* Rainfall Simulation: Dead End
+
+The next attempt --- the D8 algorithm (drainage along eight directions):
+1. Each cell receives one unit of rainfall.
+2. Water flows to the neighbor with the lowest height.
+3. Cells with accumulation above a threshold form rivers.
+4. Local minima --- depressions with no outflow --- form lakes.
+
+Result: not a single dry cell on the 64x32 map. Solid ocean instead of rivers and lakes.
+
+*Cause:* D8 models rainwater drainage. On a bounded island, interior cells drain toward the edges, accumulation concentrates at the perimeter. The river formation threshold depends on world size --- a stable value does not exist.
+
+*Key insight:* the problem was framed as "where does water accumulate?" The productive framing --- "where are the springs located?"
+
+* Spring-Based Water: Breakthrough
+
+The spring system inverts the problem. The most likely failure of the previous approach --- uncontrollable water excess (irrecoverable). The most likely failure of the new one --- water deficit (recoverable: add more springs). Controllable density replaces uncontrollable simulation.
+
+Spring placement is determined by a scoring function. For each cell above sea level, a score is computed: height (capped) multiplied by distance from the world edge. The height cap prevents all springs from clustering on mountain peaks. Edge distance ensures long river channels.
+
+#+begin_src rust
+candidates.sort_by(|a, b| {
+    let dist_a = a.0.min(ww - 1 - a.0).min(a.1.min(wh - 1 - a.1)) as f32;
+    let dist_b = b.0.min(ww - 1 - b.0).min(b.1.min(wh - 1 - b.1)) as f32;
+    let score_a = heights.get(a.0, a.1).min(3.0) * dist_a;
+    let score_b = heights.get(b.0, b.1).min(3.0) * dist_b;
+    score_b.partial_cmp(&score_a).unwrap()
+});
+
+let mut springs: Vec<(i32, i32)> = Vec::new();
+for &c in &candidates {
+    if springs.len() >= total_springs { break; }
+    let too_close = springs.iter()
+        .any(|s| (s.0 - c.0).abs().max((s.1 - c.1).abs()) < wc.spring_min_spacing);
+    if !too_close {
+        springs.push(c);
+    }
+}
+#+end_src
+
+Minimum spacing between springs prevents clustering. Two to three springs per tile[fn:tile] suffice for gameplay guarantees.
+
+[fn:tile] A tile is a fixed-size world fragment (32x32 cells). The world is assembled from multiple tiles.
+
+** River Tracing
+
+Each spring traces a river along the height gradient --- from higher to lower elevation. Greedy descent[fn:greedy] with a 25% deviation chance produces natural channel meanders:
+
+#+begin_src rust
+let chosen = if h_best < h_curr && valid.len() >= 2 {
+    let jit = hash64(
+        wc.spring_seed
+            .wrapping_add(path.len() as u64 * 31)
+            .wrapping_add(start.0 as u64 * 97 + start.1 as u64 * 13),
+    );
+    if jit % 100 < wc.meander_chance as u64 {
+        let h_alt = if is_ocean.get(valid[1].0, valid[1].1) {
+            ws.sea_level - 1.0
+        } else {
+            heights.get(valid[1].0, valid[1].1)
+        };
+        if h_alt <= h_curr + wc.meander_height_tolerance {
+            valid[1] // second-best neighbor
+        } else {
+            best
+        }
+    } else {
+        best
+    }
+} else {
+    best
+};
+#+end_src
+
+A deterministic hash[fn:hash] of position and path length replaces a random number generator --- the same seed always produces the same terrain.
+
+[fn:greedy] A greedy algorithm selects the locally best option at each step (nearest neighbor with lowest height) without looking ahead.
+[fn:hash] A hash function transforms input data into a pseudo-random number. The same input always produces the same output.
+
+** Lake Filling
+
+When a channel hits an upslope (the next cell is higher than the current one), breadth-first fill[fn:bfs] begins:
+
+#+begin_src rust
+if h_chosen > h_curr {
+    let fill_level = if h_chosen - h_curr >= wc.lake_fill_margin {
+        h_chosen + wc.lake_fill_margin
+    } else {
+        h_chosen
+    };
+    let mut lake_cells = Vec::new();
+    let mut fill_queue = VecDeque::new();
+    fill_queue.push_back(current);
+
+    while let Some(cell) = fill_queue.pop_front() {
+        if lake_cells.len() >= wc.lake_max_cells { break; }
+        for (nx, nz) in [(cell.0+1,cell.1), (cell.0-1,cell.1),
+                         (cell.0,cell.1+1), (cell.0,cell.1-1)] {
+            if heights.get(nx, nz) <= fill_level
+                && !is_water.get(nx, nz)
+                && !lake_set.get(nx, nz)
+            {
+                lake_set.set(nx, nz, true);
+                lake_cells.push((nx, nz));
+                fill_queue.push_back((nx, nz));
+            }
+        }
+    }
+}
+#+end_src
+
+A cap of 25 cells prevents world flooding. Fewer than two filled cells is a puddle, not a lake; such results are discarded.
+
+[fn:bfs] Breadth-first search (BFS) traverses neighboring cells in waves. Immediate neighbors are checked first, then their neighbors, and so on. The result is a filled connected region.
+
+* Scaling: From One Tile to a Continent
+
+#+CAPTION: v7: multi-tile world, ocean columns, edge cliffs
+[[file:/magnum-opus/03-tile-expansion.png]]
+
+The world spans 256x256 cells (8x8 tiles). Generation is global --- a single noise pass across the entire area, no seams between tiles.
+
+Three decisions that determined scalability:
+
+- *Ocean columns instead of a plane.* An ocean plane obscured interior valleys. Ocean cells now render as columns at sea level, background is a solid color. Valleys and depressions remain visible.
+- *Channel carving.* Rivers deepen the terrain by half a level, forming visible channels with steep banks.
+- *Element guarantee.* The generator must ensure at least one lake and one waterfall (river intersecting a cliff). Absence of either constitutes a generation error.
+
+* Stamps and Resources
+
+#+CAPTION: v8: geometric stamps, 15 materials, resource deposits
+[[file:/magnum-opus/04-full-terrain.png]]
+
+Version v8 introduces explicit geometric stamps over noise: mountains, basins, rifts[fn:rift].
+
+The initial implementation used a maximum operation --- the stamp applied only if its height exceeded the existing terrain. Debug metrics reveal the problem: noise independently produces 364 cells above threshold, the stamp adds 8 more via maximum. Eight out of three hundred sixty-four --- visually indistinguishable from no stamp at all.
+
+The fix --- an assignment operation. Stamps write absolute values, dominating over noise. Debug metrics prove more accurate than visual assessment.
+
+River width increases from 1 cell at the source to 3 at the mouth. Expansion is perpendicular to the flow direction.
+
+Three resource types (copper, metal, coal) are placed using golden angle[fn:golden] distribution with per-resource parameters: cluster count, nodes per cluster, radius.
+
+[fn:rift] A rift is an elongated crack in the terrain. Generated by Bresenham's algorithm (rasterizing a line on a grid) with added random deviation.
+[fn:golden] The golden angle (~137.5 degrees) provides maximally uniform point distribution around a circle. Used in botany (sunflower seed arrangement) and computer graphics.
+
+* Mountains: Smooth Profile
+
+#+CAPTION: v9: mountains at height 15-40 units, 30 smoothing passes
+[[file:/magnum-opus/05-mountains.png]]
+
+Mountain shape is determined by two mathematical techniques.
+
+*Smooth interpolation (smoothstep).* A function that provides a smooth transition from one to zero with zero derivative at both ends --- mountain peak and base blend into the surrounding terrain without a visible seam:
+
+#+begin_src rust
+let t = (dist / radius).clamp(0.0, 1.0);
+let blend = 1.0 - t * t * (3.0 - 2.0 * t);
+
+let jitter = noise_octave(nx, nz, mc.jitter_scale, jitter_seed) * mc.jitter_amp;
+let target_h = (peak_h + jitter).clamp(0.0, peak_h);
+
+let existing = heights.get(nx, nz);
+let new_h = existing + (target_h - existing) * blend;
+heights.set(nx, nz, new_h.max(existing));
+#+end_src
+
+The formula =1 - t²(3 - 2t)= returns one at the center and zero at the edge. Noise overlay (±2.0) breaks the geometric regularity of the cone, producing organic contours.
+
+*Post-quantization smoothing.* Quantization[fn:quant] converts smooth heights into discrete steps --- visible stairstepping. 30 passes of neighbor averaging eliminate the stairstepping while preserving the overall shape. Critical order of operations: smoothing is performed strictly *after* quantization. The reverse order is pointless: quantization after smoothing recreates the very steps that were just removed.
+
+Each mountain is unique: peak height from 15 to 40 units, base radius from 12 to 25 cells. Material hierarchy creates visual elevation: grass -> rock (above 3.0) -> snow peak (above 6.0).
+
+[fn:quant] Quantization is rounding continuous values to discrete levels. For example, height 2.37 rounds to 2.5. Creates the characteristic stepped terrain.
+
+* Full Generation Pipeline
+
+#+CAPTION: Sequence of 11 terrain generation stages
+[[file:/magnum-opus/pipeline.png]]
+
+Each stage's configuration is extracted into separate structures:
+
+#+begin_src rust
+pub(super) struct MountainConfig {
+    pub height_min: f32,       // 15.0
+    pub height_max: f32,       // 40.0
+    pub radius_min: f32,       // 12.0
+    pub radius_max: f32,       // 25.0
+    pub min_spacing: i32,      // 18
+    pub smooth_passes: u32,    // 30
+    pub jitter_scale: f32,     // 4.0
+    pub jitter_amp: f32,       // 2.0
+}
+
+pub(super) struct WaterConfig {
+    pub springs_per_tile: u32,         // 2
+    pub meander_chance: u32,           // 25 (%)
+    pub lake_max_cells: usize,         // 25
+    pub river_carve_depth: f32,        // 0.5
+    pub river_width_phase1: f32,       // 0.33
+    pub river_width_phase2: f32,       // 0.66
+}
+#+end_src
+
+Full cycle performance: 233 ms -> 73 ms (3.2x speedup) after optimization. Double-buffered array swaps instead of in-place mutation, flat boolean arrays instead of BFS structures.
+
+* Summary
+
+The terrain generator is stable --- 29 tests cover all stages. In parallel, Forge --- a parametric asset editor with 17 primitives and automated geometry validation --- is under development.
+
+Next phase --- gameplay modules: buildings, production chains, transport. The terrain is the foundation on which game mechanics are built.
