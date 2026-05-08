@@ -1,0 +1,325 @@
+#+title: Aggressive Power Saving on a Linux Laptop: TLP, Pitfalls, Real Measurements
+#+date: 2026-05-08
+#+AUTHOR: veschin
+#+summary: A factual walkthrough of per-subsystem power tuning on a Ryzen laptop under Arch Linux: what TLP configures, which vendor hardware breaks, and what the before/after numbers look like.
+#+DRAFT: true
+#+TAGS[]: linux power-saving tlp ryzen laptop
+
+* Introduction
+
+macOS and Windows ship with vendor-controlled power management that coordinates the entire hardware stack through a single interface. Linux exposes each subsystem independently, with no built-in coordinator between CPU frequency scaling, PCI Express link states, Wi-Fi radio behavior, audio codec sleep timers, and disk head parking. Without explicit configuration, each subsystem defaults to performance settings. The result on a 84 Wh battery is a runtime of three to four hours instead of the six-plus hours the hardware can sustain.
+
+| Platform    | Battery | Idle draw | Runtime   | Notes                          |
+|-------------+---------+-----------+-----------+--------------------------------|
+| macOS (M2)  | 52 Wh   | 5-7 W     | 15-18 h   | Vendor controls full stack     |
+| Linux stock | 84 Wh   | 15-20 W   | 3-4 h     | No subsystem coordination      |
+| Linux + TLP | 84 Wh   | 10-11 W   | ~6 h      | Aggressive per-subsystem tuning |
+
+* Prerequisites
+
+Six independent subsystems require explicit power configuration; each can regress battery life without affecting the others.
+
+- CPU: frequency governor, performance hint (EPP), platform power profile, boost state
+- GPU: panel self-refresh (PSR), runtime PM
+- PCI Express: Active State Power Management (ASPM), L1 substates
+- Audio: codec sleep timer, controller wake behavior
+- Wi-Fi: radio power management, per-vendor quirks
+- Storage: disk head parking (APM), NVMe power states
+
+Several tools compete for the same hardware registers; running more than one concurrently produces undefined behavior.
+
+| Tool                   | First release | Scope                         | Default on                  | Notes                                              |
+|------------------------+---------------+-------------------------------+-----------------------------+----------------------------------------------------|
+| laptop-mode-tools[fn:1] | 2005          | Broad, disk-centric           | None                        | Mostly superseded                                  |
+| TLP[fn:2]              | 2011          | Full stack + charge thresholds | None (manual install)       | Covers all subsystems; most complete               |
+| auto-cpufreq[fn:3]     | 2020          | CPU only                      | None                        | Dynamic governor switching; narrow scope           |
+| PPD[fn:4]              | 2021          | 4 CPU parameters              | GNOME, KDE                  | Silently conflicts with TLP; TLP 1.9+ adds tlp-pd  |
+| tuned[fn:5]            | ~2012         | Profile-based, broad          | Fedora 41+                  | Must be removed before TLP on Fedora               |
+| thermald[fn:6]         | 2013          | Thermal throttling only       | Ubuntu                      | Safe alongside TLP                                 |
+| intel-lpmd[fn:7]       | 2023          | Intel CPU idle management     | None                        | Safe alongside TLP                                 |
+
+PPD (Power Profiles Daemon) and tuned write to the same CPU registers as TLP; both must be removed or masked before TLP is started. TLP 1.9 introduced ~tlp-pd~, a PPD-compatible API that lets desktop environments interact with TLP instead of a separate daemon.
+
+* Installation
+
+Kernel module ~systemd-rfkill~ conflicts with TLP's radio device management and must be masked on all distributions.
+
+** Arch Linux
+
+#+begin_src bash
+pacman -S tlp tlp-rdw
+systemctl enable --now tlp
+systemctl mask systemd-rfkill systemd-rfkill.socket
+#+end_src
+
+** Ubuntu / Debian
+
+The upstream PPA provides a more current release than the distribution package.[fn:8]
+
+#+begin_src bash
+add-apt-repository ppa:linrunner/tlp
+apt update && apt install tlp tlp-rdw
+systemctl enable --now tlp
+systemctl mask systemd-rfkill systemd-rfkill.socket
+#+end_src
+
+** Fedora
+
+tuned is the default power manager on Fedora 41 and later; it must be removed before TLP starts, as concurrent operation produces unpredictable governor settings.
+
+#+begin_src bash
+dnf remove tuned power-profiles-daemon
+dnf install tlp tlp-rdw
+systemctl enable --now tlp
+systemctl mask systemd-rfkill systemd-rfkill.socket
+#+end_src
+
+** NixOS
+
+#+begin_src nix
+services.tlp = {
+  enable = true;
+  settings = { /* see Configuration section */ };
+};
+services.power-profiles-daemon.enable = false;
+#+end_src
+
+* Configuration
+
+TLP reads a single configuration file at ~/etc/tlp.conf~, applying separate values for AC and battery power. Every parameter accepts two variants: ~PARAM_ON_AC~ and ~PARAM_ON_BAT~.
+
+** CPU
+
+Platform profile (available since kernel 5.12)[fn:9] sets a firmware-level power envelope with three states. EPP (Energy Performance Preference, available on AMD since kernel 6.5 and on Intel since Skylake)[fn:10] is a per-core hint to the hardware scheduler indicating how aggressively to trade frequency for power.
+
+| Parameter        | Values                                              | Notes                                           |
+|------------------+-----------------------------------------------------+-------------------------------------------------|
+| Platform profile | ~low-power~, ~balanced~, ~performance~              | Firmware-level; affects thermal and clock limits |
+| EPP              | ~power~, ~balance_power~, ~balance_performance~, ~performance~ | AMD Zen 2+, Intel Skylake+              |
+| Boost            | ~0~ (disabled), ~1~ (enabled)                       | Off: -35% multithread, temp 90C to 55C, +30% runtime |
+
+On AMD processors, platform profile and EPP write to overlapping hardware registers; setting both leaves the CPU at a fixed 1.3 GHz regardless of load. The correct configuration sets only the platform profile and leaves EPP empty for battery mode.
+
+#+begin_src conf
+# /etc/tlp.conf - CPU section
+PLATFORM_PROFILE_ON_AC=performance
+PLATFORM_PROFILE_ON_BAT=low-power
+
+# AMD only: leave CPU_ENERGY_PERF_POLICY_ON_BAT empty
+CPU_ENERGY_PERF_POLICY_ON_AC=performance
+CPU_ENERGY_PERF_POLICY_ON_BAT=
+
+CPU_BOOST_ON_AC=1
+CPU_BOOST_ON_BAT=0
+#+end_src
+
+** PCI Express
+
+ASPM (Active State Power Management) governs how quickly PCI Express links enter low-power states between transfers.[fn:11] The most aggressive substate, L1.2, causes firmware-level hangs on certain NVMe controllers and Xid 79 errors on NVIDIA discrete GPUs; ~powersave~ achieves substantial savings without triggering these.
+
+#+begin_src conf
+PCIE_ASPM_ON_AC=performance
+PCIE_ASPM_ON_BAT=powersave
+#+end_src
+
+** Audio
+
+The HDA (High Definition Audio) codec sleep timer controls how long the audio controller waits before suspending between playback events.[fn:12] At the default value of one second, each audio event produces an audible click as the codec wakes. Setting the timer to ten seconds eliminates the click during normal use; setting ~power_save_controller~ to ~N~ prevents the controller from suspending independently of the codec.
+
+#+begin_src conf
+SOUND_POWER_SAVE_ON_AC=1
+SOUND_POWER_SAVE_ON_BAT=10
+SOUND_POWER_SAVE_CONTROLLER=N
+#+end_src
+
+** Storage
+
+APM (Advanced Power Management) level controls how aggressively disk firmware parks the read/write heads.[fn:13] Levels 1-254 activate head parking; repeated parking on spinning media produces audible clicks and accelerates mechanical wear. Setting APM to 255 disables parking entirely without disabling the drive's other power states.
+
+#+begin_src conf
+DISK_APM_LEVEL_ON_AC="254 254"
+DISK_APM_LEVEL_ON_BAT="128 128"
+# For WD drives that click: override to 255
+# DISK_APM_LEVEL_ON_BAT="255 255"
+#+end_src
+
+** Wi-Fi
+
+TLP enables the kernel Wi-Fi power management flag on battery, which instructs the radio to use PSM (Power Save Mode). This flag is insufficient for Intel Wi-Fi adapters; per-driver module parameters must be set separately (details in the Pitfalls section).
+
+#+begin_src conf
+WIFI_PWR_ON_AC=off
+WIFI_PWR_ON_BAT=on
+#+end_src
+
+** USB
+
+TLP enables USB autosuspend globally for all devices, placing each USB device into a low-power state after an inactivity timeout.[fn:14] Devices that do not handle autosuspend correctly (DACs, webcams, gaming mice) require explicit exclusion via ~USB_DENYLIST~. The parameter was renamed from ~USB_BLACKLIST~ in TLP 1.4.
+
+#+begin_src conf
+USB_AUTOSUSPEND=1
+# Add device IDs for problematic hardware (lsusb for IDs)
+USB_DENYLIST="1234:5678 abcd:ef01"
+#+end_src
+
+** Charge Thresholds
+
+Charge thresholds limit the battery charge level to reduce long-term degradation; keeping the battery below 80% of capacity measurably extends cycle life.[fn:15] Hardware support varies significantly by vendor.
+
+| Vendor     | Kernel requirement | Start threshold | Stop threshold | Notes                                              |
+|------------+--------------------+-----------------+----------------+----------------------------------------------------|
+| ThinkPad   | 5.17+              | 0-99%           | 1-100%         | Full range supported                               |
+| IdeaPad    | Any                | N/A             | ~60% fixed     | Single fixed threshold only                        |
+| ASUS       | Any                | N/A             | 40/60/80%      | Select models only                                 |
+| Dell       | 6.12+              | 50-95%          | 55-100%        | Minimum 5% difference required                     |
+| Framework  | 6.17 (fix)         | Variable        | Variable       | Recent EC firmware broke thresholds; fixed in 6.17 |
+| Samsung    | Any                | N/A             | 80% fixed      | Single fixed threshold                             |
+| Toshiba    | Any                | N/A             | 80/100% NVRAM  | NVRAM-stored; persists across OS                   |
+
+#+begin_src conf
+# ThinkPad example
+START_CHARGE_THRESH_BAT0=75
+STOP_CHARGE_THRESH_BAT0=80
+#+end_src
+
+* Pitfalls
+
+Hardware-specific regressions appear after enabling TLP's global settings; the symptom often points unambiguously to the affected subsystem.
+
+| Subsystem    | Symptom                          | Cause                                       | Fix                                             |
+|--------------+----------------------------------+---------------------------------------------+-------------------------------------------------|
+| Bluetooth    | Audio dropout, HID lag           | ~btusb~ autosuspend enabled by TLP          | ~modprobe btusb enable_autosuspend=0~           |
+| Wi-Fi Intel  | 60 ms latency spikes, drops      | ~iwlwifi~ PSM active                        | ~iwlwifi power_save=0~, ~iwlmvm power_scheme=1~ |
+| Wi-Fi MediaTek | Disconnect every 11-12 h       | Driver PM bug                               | Kernel 6.19+ contains the fix                   |
+| Wi-Fi Qualcomm | Degradation with BT active     | Coexistence firmware bug                    | Vendor firmware update required                 |
+| NVMe (some Samsung) | System hang on wake      | PCIe L1.2 substate firmware issue          | ~PCIE_ASPM_ON_BAT=powersave~ (not powersupersave) |
+| NVIDIA dGPU  | Xid 79 errors                    | PCIe L1.2 substate incompatibility         | ~PCIE_ASPM_ON_BAT=powersave~                    |
+| Audio        | Click on playback start          | Codec sleep timer at 1 s                    | ~SOUND_POWER_SAVE_ON_BAT=10~                    |
+| Disk (WD)    | Rhythmic click during disk idle  | APM head parking at level 1-254             | ~DISK_APM_LEVEL_ON_BAT="255 255"~              |
+| USB DAC/webcam/mouse | Device stops responding  | Autosuspend not handled by device firmware | Add device ID to ~USB_DENYLIST~                 |
+| AMD GPU (OLED) | Screen flickering on battery   | PSR (Panel Self-Refresh) on OLED panels     | ~amdgpu.dcdebugmask=0x10~ kernel parameter      |
+| Suspend/resume | TLP settings reset after wake  | TLP applies settings only at boot/unplug    | systemd resume service (see below)              |
+
+** Bluetooth Module Parameter
+
+TLP enables autosuspend for ~btusb~ as a USB device; the Bluetooth stack interprets this as a hardware disconnect, producing audio dropout and HID input lag. The fix applies at module load time, persisting across reboots when placed in ~/etc/modprobe.d/~.
+
+#+begin_src conf
+# /etc/modprobe.d/btusb.conf
+options btusb enable_autosuspend=0
+#+end_src
+
+** Intel Wi-Fi Module Parameters
+
+TLP's ~WIFI_PWR_ON_BAT=on~ flag activates the kernel's generic Wi-Fi PSM, producing 60 ms latency spikes and intermittent disconnects on Intel Wi-Fi adapters. Per-driver parameters at the module level override this behavior.
+
+#+begin_src conf
+# /etc/modprobe.d/iwlwifi.conf
+options iwlwifi power_save=0
+options iwlmvm power_scheme=1
+#+end_src
+
+** AMD GPU Panel Self-Refresh
+
+PSR (Panel Self-Refresh) reduces GPU power draw on static frames; on OLED panels with certain AMD integrated GPU firmware (kernel 5.16+), it produces visible flickering.[fn:16] The ~dcdebugmask~ parameter disables the PSR path at the display controller level.
+
+#+begin_src conf
+# /etc/kernel/cmdline or GRUB_CMDLINE_LINUX
+amdgpu.dcdebugmask=0x10
+#+end_src
+
+** Suspend Resume Service
+
+TLP applies power settings at service start, AC/battery transition, and manual invocation; a suspend/resume cycle does not trigger any of these, leaving some subsystem settings in their default post-wake state.
+
+#+begin_src systemd
+# /etc/systemd/system/tlp-resume.service
+[Unit]
+Description=TLP Resume
+After=suspend.target hibernate.target hybrid-sleep.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/sbin/tlp bat
+
+[Install]
+WantedBy=suspend.target hibernate.target hybrid-sleep.target
+#+end_src
+
+#+begin_src bash
+systemctl enable tlp-resume.service
+#+end_src
+
+** AMD CPU Register Conflict
+
+Both platform profile and EPP on AMD processors (Zen 2+) write to the same hardware registers via different kernel interfaces. With both set, the hardware resolves the conflict by clamping frequency to the lowest mapped state (~1.3 GHz), ignoring dynamic load entirely. Setting ~CPU_ENERGY_PERF_POLICY_ON_BAT~ to an empty string leaves the register under platform profile's exclusive control.
+
+* Verification
+
+| Command               | What it shows                                              |
+|-----------------------+-------------------------------------------------------------|
+| ~tlp-stat -s~[fn:2]   | TLP service status, active profile, detected conflicts      |
+| ~tlp-stat -p~         | CPU governor, EPP value, platform profile, boost state      |
+| ~tlp-stat -b~         | Battery charge level, thresholds, health                    |
+| ~tlp-stat -u~         | USB device list with autosuspend state and denylist entries |
+| ~powertop~[fn:17]     | Per-process and per-device power estimates, wakeup counts   |
+| ~turbostat~[fn:18]    | Per-core frequency, C-state residency, package power (root) |
+| ~s-tui~[fn:19]        | Real-time CPU frequency, utilization, temperature           |
+
+~powertop --auto-tune~ applies its own autosuspend and PM settings, overriding TLP configuration; running it for diagnostics only (without ~--auto-tune~) avoids the conflict.
+
+* Results
+
+Test conditions: Arch Linux 6.19.12, Hyprland 0.54, screen at 30% brightness, Wi-Fi connected, Bluetooth off, browser with tabs, terminal session, no video playback.
+
+| Metric              | Baseline (no tuning) | With TLP aggressive |
+|---------------------+----------------------+---------------------|
+| Idle power draw     | 15-20 W              | 10.7 W              |
+| Estimated runtime   | 3-4 h                | ~6 h                |
+| Idle CPU frequency  | 2.0-2.5 GHz          | 1.1-1.4 GHz         |
+| Load CPU frequency  | 4.5-5.1 GHz          | 3.0-3.2 GHz         |
+| CPU temperature     | 70-90 C              | 45-55 C             |
+
+Full configuration:
+
+#+begin_src conf
+# /etc/tlp.conf - complete aggressive configuration
+PLATFORM_PROFILE_ON_AC=performance
+PLATFORM_PROFILE_ON_BAT=low-power
+CPU_ENERGY_PERF_POLICY_ON_AC=performance
+CPU_ENERGY_PERF_POLICY_ON_BAT=
+CPU_BOOST_ON_AC=1
+CPU_BOOST_ON_BAT=0
+PCIE_ASPM_ON_AC=performance
+PCIE_ASPM_ON_BAT=powersave
+SOUND_POWER_SAVE_ON_AC=1
+SOUND_POWER_SAVE_ON_BAT=10
+SOUND_POWER_SAVE_CONTROLLER=N
+DISK_APM_LEVEL_ON_AC="254 254"
+DISK_APM_LEVEL_ON_BAT="128 128"
+WIFI_PWR_ON_AC=off
+WIFI_PWR_ON_BAT=on
+USB_AUTOSUSPEND=1
+START_CHARGE_THRESH_BAT0=75
+STOP_CHARGE_THRESH_BAT0=80
+#+end_src
+
+[fn:1] [[https://github.com/rickysarraf/laptop-mode-tools][laptop-mode-tools - GitHub]]
+[fn:2] [[https://linrunner.de/tlp/][TLP - Linux Advanced Power Management]]
+[fn:3] [[https://github.com/AdnanHodzic/auto-cpufreq][auto-cpufreq - GitHub]]
+[fn:4] [[https://gitlab.freedesktop.org/upower/power-profiles-daemon][power-profiles-daemon - freedesktop GitLab]]
+[fn:5] [[https://tuned-project.org/][tuned - project page]]
+[fn:6] [[https://github.com/intel/thermal_daemon][thermald - GitHub]]
+[fn:7] [[https://github.com/intel/intel-lpmd][intel-lpmd - GitHub]]
+[fn:8] [[https://launchpad.net/~linrunner/+archive/ubuntu/tlp][TLP PPA - Launchpad]]
+[fn:9] [[https://www.kernel.org/doc/html/latest/admin-guide/pm/cpufreq.html][CPU Performance Scaling - kernel.org]]
+[fn:10] [[https://www.kernel.org/doc/html/latest/admin-guide/pm/intel_epb.html][Energy Performance Bias - kernel.org]]
+[fn:11] [[https://www.kernel.org/doc/html/latest/admin-guide/pm/pcie_aspm.html][PCIe Active State Power Management - kernel.org]]
+[fn:12] [[https://www.kernel.org/doc/html/latest/sound/alsa-configuration.html][ALSA configuration - kernel.org]]
+[fn:13] [[https://linrunner.de/tlp/settings/disks.html][TLP Disk Settings - linrunner.de]]
+[fn:14] [[https://linrunner.de/tlp/settings/usb.html][TLP USB Settings - linrunner.de]]
+[fn:15] [[https://batteryuniversity.com/article/bu-415-how-to-charge-and-when-to-charge][BU-415: How to Charge - Battery University]]
+[fn:16] [[https://gitlab.freedesktop.org/drm/amd/-/issues/1609][amdgpu PSR flickering - freedesktop GitLab]]
+[fn:17] [[https://01.org/powertop][PowerTOP - Intel]]
+[fn:18] [[https://github.com/intel/turbostat][turbostat - kernel tools]]
+[fn:19] [[https://github.com/amanusk/s-tui][s-tui - GitHub]]

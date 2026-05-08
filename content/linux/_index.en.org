@@ -1,0 +1,2 @@
+#+title: Linux
+#+summary: Linux, power management, Hyprland, Wayland, infrastructure
