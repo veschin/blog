@@ -9,7 +9,10 @@ description = "Блог про Emacs, Doom Emacs, Linux, Lisp и функцио�
 keywords = ["emacs", "doom emacs", "linux", "lisp", "clojure", "clojurescript"]
 images = ["/clojurescript.png"]
 DateFormat = "2 January 2006"
-mainSections = ["posts", "magnum-opus"]
+mainSections = ["posts", "magnum-opus", "linux"]
+ShowToc = true
+TocOpen = true
+UseHugoToc = true
 
 
 [[params.socialIcons]]
@@ -22,6 +25,11 @@ publisherType = "Person"
 [params.cover]
 responsiveImages = true
 
+[markup.tableOfContents]
+startLevel = 1
+endLevel = 3
+ordered = false
+
 [markup.highlight]
 codeFences = true
 guessSyntax = true
@@ -33,6 +41,12 @@ identifier = "magnum-opus"
 name = "Magnum Opus DevLog"
 url = "/magnum-opus/"
 weight = 10
+
+[[menu.main]]
+identifier = "linux"
+name = "Linux"
+url = "/linux/"
+weight = 20
 
 [[menu.main]]
 identifier = "github"

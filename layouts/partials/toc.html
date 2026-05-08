@@ -1,0 +1,31 @@
+{{/* Fix org-mode multiline headings: collapse <h2 id="...">\nText\n</h2> into single line */}}
+{{- $content := .Content -}}
+{{- $content = replaceRE "(<h[1-6][^>]*>)\\s*\\n\\s*" "$1" $content -}}
+{{- $content = replaceRE "\\s*\\n\\s*(</h[1-6]>)" "$1" $content -}}
+
+{{- $headers := findRE "<h[1-6].*?>(.+?)</h[1-6]>" $content -}}
+{{- $has_headers := ge (len $headers) 1 -}}
+{{- if $has_headers -}}
+<div class="toc">
+    <details {{if (.Param "TocOpen") }} open{{ end }}>
+        <summary accesskey="c" title="(Alt + C)">
+            <span class="details">{{- i18n "toc" | default "Table of Contents" }}</span>
+        </summary>
+        <div class="inner">
+            <ul>
+                {{- range $headers -}}
+                {{- $headerLevel := index (findRE "[1-6]" . 1) 0 -}}
+                {{- $id := index (findRE "id=\"[^\"]+\"" . 1) 0 -}}
+                {{- $cleanedID := replace (replace $id "id=\"" "") "\"" "" -}}
+                {{- $text := replaceRE "<h[1-6][^>]*>" "" . -}}
+                {{- $text = replaceRE "</h[1-6]>" "" $text -}}
+                {{- $text = trim $text " \n\r\t" -}}
+                <li style="margin-left: {{ mul (sub (int $headerLevel) 2) 16 }}px">
+                    <a href="#{{ $cleanedID }}">{{ $text }}</a>
+                </li>
+                {{- end }}
+            </ul>
+        </div>
+    </details>
+</div>
+{{- end }}
