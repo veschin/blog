@@ -1,7 +1,7 @@
 #+title: Агрессивное энергосбережение на Linux-ноутбуке: TLP, подводные камни, реальные замеры
 #+date: 2026-05-08
 #+summary: Как сократить потребление с 15-20W до 10-11W на Arch Linux с Ryzen 8845H: установка TLP, настройка CPU/GPU/WiFi/PCIe, восемь реальных граблей с фиксами и результаты замеров.
-#+DRAFT: true
+#+DRAFT: false
 #+AUTHOR: veschin
 #+TAGS[]: linux power tlp arch laptop
 

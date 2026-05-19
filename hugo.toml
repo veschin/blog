@@ -49,6 +49,12 @@ url = "/linux/"
 weight = 20
 
 [[menu.main]]
+identifier = "calibration"
+name = "Калибровка"
+url = "/calibration/"
+weight = 25
+
+[[menu.main]]
 identifier = "github"
 name = "My GitHub"
 url = "https://github.com/veschin"
@@ -63,6 +69,25 @@ weight = 30
 [languages.en.params.homeInfoParams]
     Title = "Oleg Veschin"
     Content = "Emacs, Linux, Lisp, gamedev. I write about what I build."
+
+[[languages.en.menu.main]]
+    identifier = "magnum-opus"
+    name = "Magnum Opus DevLog"
+    url = "/magnum-opus/"
+    weight = 10
+
+[[languages.en.menu.main]]
+    identifier = "calibration"
+    name = "Calibration"
+    url = "/calibration/"
+    weight = 20
+
+[[languages.en.menu.main]]
+    identifier = "github"
+    name = "My GitHub"
+    url = "https://github.com/veschin"
+    weight = 30
+
 [languages.ru]
     languageName = 'Русский'
     title = 'Emacs · Linux · Lisp · Gamedev'

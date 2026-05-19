@@ -2,7 +2,7 @@
 #+date: 2026-05-08
 #+AUTHOR: veschin
 #+summary: A factual walkthrough of per-subsystem power tuning on a Ryzen laptop under Arch Linux: what TLP configures, which vendor hardware breaks, and what the before/after numbers look like.
-#+DRAFT: true
+#+DRAFT: false
 #+TAGS[]: linux power-saving tlp ryzen laptop
 
 * Introduction
